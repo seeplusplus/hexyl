@@ -123,23 +123,19 @@ fn run() -> Result<()> {
         None => Box::new(stdin.lock()),
     };
 
-    let length_arg = matches.value_of("length").or(matches.value_of("bytes"));
-
-    if let Some(length) = length_arg.and_then(parse_hex_or_int) {
-        reader = Box::new(reader.take(length));
-    }
-
     let byterange_arg = matches.value_of("range");
     let mut range_offset = 0;
     if let Some(range) = byterange_arg {
         if let Ok((offset, num_bytes)) = parse_range(range) {
             range_offset = offset;
-            let mut discard = vec![0u8; offset as usize];
-            reader
-                .read_exact(&mut discard)
-                .map_err(|_| format!("Unable to start reading at {}, input too small", offset))?;
-            reader = Box::new(reader.take(num_bytes));
+            reader = Box::new(reader.take(num_bytes + offset));
         }
+    }
+    
+    let length_arg = matches.value_of("length").or(matches.value_of("bytes"));
+
+    if let Some(length) = length_arg.and_then(parse_hex_or_int) {
+        reader = Box::new(reader.take(length));
     }
 
     let show_color = match matches.value_of("color") {
@@ -159,7 +155,7 @@ fn run() -> Result<()> {
     let display_offset = matches
         .value_of("display_offset")
         .and_then(parse_hex_or_int)
-        .unwrap_or(range_offset);
+        .unwrap_or(0) + range_offset;
 
     // Set up Ctrl-C handler
     let cancelled = Arc::new(AtomicBool::new(false));
@@ -174,7 +170,7 @@ fn run() -> Result<()> {
     let mut stdout_lock = stdout.lock();
 
     let mut printer = Printer::new(&mut stdout_lock, show_color, border_style, squeeze);
-    printer.display_offset(display_offset as usize);
+    printer.read_offset(range_offset as usize).display_offset(display_offset as usize);
     printer
         .print_all(&mut reader, Some(cancelled))
         .map_err(|err| format!("{}", err))?;

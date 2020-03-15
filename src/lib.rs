@@ -156,6 +156,7 @@ pub struct Printer<'a, Writer: Write> {
     byte_char_table: Vec<String>,
     squeezer: Squeezer,
     display_offset: usize,
+    skip_offset: usize,
 }
 
 impl<'a, Writer: Write> Printer<'a, Writer> {
@@ -195,11 +196,17 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
                 .collect(),
             squeezer: Squeezer::new(use_squeeze),
             display_offset: 0,
+            skip_offset: 0,
         }
     }
 
     pub fn display_offset(&mut self, display_offset: usize) -> &mut Self {
         self.display_offset = display_offset;
+        self
+    }
+
+    pub fn read_offset(&mut self, skip_offset: usize) -> &mut Self {
+        self.skip_offset = skip_offset;
         self
     }
 
@@ -415,6 +422,7 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
         canceller: Option<Cancelled>,
     ) -> Result<(), std::io::Error> {
         let mut buffer = [0; BUFFER_SIZE];
+        let mut bytes_read = 0;
         'mainloop: loop {
             let size = reader.read(&mut buffer)?;
             if size == 0 {
@@ -429,6 +437,11 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
             }
 
             for b in &buffer[..size] {
+                if bytes_read < self.skip_offset
+                {
+                    bytes_read += 1;
+                    continue;
+                }
                 let res = self.print_byte(*b);
 
                 if res.is_err() {
