@@ -156,7 +156,7 @@ pub struct Printer<'a, Writer: Write> {
     byte_char_table: Vec<String>,
     squeezer: Squeezer,
     display_offset: usize,
-    skip_offset: usize,
+    read_offset: usize,
 }
 
 impl<'a, Writer: Write> Printer<'a, Writer> {
@@ -196,7 +196,7 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
                 .collect(),
             squeezer: Squeezer::new(use_squeeze),
             display_offset: 0,
-            skip_offset: 0,
+            read_offset: 0,
         }
     }
 
@@ -205,8 +205,8 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
         self
     }
 
-    pub fn read_offset(&mut self, skip_offset: usize) -> &mut Self {
-        self.skip_offset = skip_offset;
+    pub fn read_offset(&mut self, read_offset: usize) -> &mut Self {
+        self.read_offset = read_offset;
         self
     }
 
@@ -255,7 +255,7 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
         }
 
         let style = COLOR_OFFSET.normal();
-        let byte_index = format!("{:08x}", (self.idx - 1) + self.display_offset);
+        let byte_index = format!("{:08x}", (self.idx - 1) + self.display_offset + self.read_offset);
         let formatted_string = if self.show_color {
             format!("{}", style.paint(byte_index))
         } else {
@@ -437,7 +437,7 @@ impl<'a, Writer: Write> Printer<'a, Writer> {
             }
 
             for b in &buffer[..size] {
-                if bytes_read < self.skip_offset
+                if bytes_read < self.read_offset
                 {
                     bytes_read += 1;
                     continue;
@@ -517,6 +517,27 @@ mod tests {
         let mut printer: Printer<Vec<u8>> =
             Printer::new(&mut output, false, BorderStyle::Unicode, true);
         printer.display_offset(0xdeadbeef);
+
+        printer.print_all(input, None).unwrap();
+
+        let actual_string: &str = str::from_utf8(&output).unwrap();
+        assert_eq!(actual_string, expected_string)
+    }
+
+    #[test]
+    fn display_and_read_offset() {
+        let input = io::Cursor::new(b"spamspamspamspamspam");
+        let expected_string =
+            "┌────────┬─────────────────────────┬─────────────────────────┬────────┬────────┐
+│deadbeef│ 73 70 61 6d             ┊                         │spam    ┊        │
+└────────┴─────────────────────────┴─────────────────────────┴────────┴────────┘
+"
+            .to_owned();
+
+        let mut output = vec![];
+        let mut printer: Printer<Vec<u8>> =
+            Printer::new(&mut output, false, BorderStyle::Unicode, true);
+        printer.read_offset(16).display_offset(0xdeadbedf);
 
         printer.print_all(input, None).unwrap();
 

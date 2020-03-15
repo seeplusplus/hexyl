@@ -128,7 +128,10 @@ fn run() -> Result<()> {
     if let Some(range) = byterange_arg {
         if let Ok((offset, num_bytes)) = parse_range(range) {
             range_offset = offset;
-            reader = Box::new(reader.take(num_bytes + offset));
+            if num_bytes != u64::max_value()
+            {
+                reader = Box::new(reader.take(num_bytes + offset));
+            }
         }
     }
     
@@ -155,7 +158,7 @@ fn run() -> Result<()> {
     let display_offset = matches
         .value_of("display_offset")
         .and_then(parse_hex_or_int)
-        .unwrap_or(0) + range_offset;
+        .unwrap_or(0);
 
     // Set up Ctrl-C handler
     let cancelled = Arc::new(AtomicBool::new(false));
